@@ -27,6 +27,55 @@ OCR quality on 1979 regional papers is inconsistent — plan on re-running any
 zero-result search with `ExactSearch` off, and with the alternate period
 phrasing below.
 
+### Engine quirk: only `FreeSearch` is actually required
+
+Discovered while running Phase 1 Q1 (2026-07-11): despite the name,
+`PhraseSearch` is **not** AND'ed against other fields. Reverse-engineered
+from the site's composed query string (`basicsearch=`): `FreeSearch` terms
+alone get a `+` (required) prefix; `PhraseSearch` and `SomeSearch` terms are
+always unprefixed, which in the underlying Lucene-style query means
+"optional, boosts relevance if present" — not "must match". A query built
+from `PhraseSearch: Moonraker` + `SomeSearch: Dolly braces teeth` (no
+`FreeSearch`) returned 9 results, none of which mentioned Moonraker
+anywhere on the page — they matched purely on "braces"/"teeth" from an
+unrelated Poly Styrene wire story.
+
+**Consequence for every phase below:** wherever a query pairs a
+"must-have" `PhraseSearch` term with a `SomeSearch` OR-group (Phase 1 Q1/Q2,
+Phase 3 Q1, Phase 4 Q1), put the must-have term in `FreeSearch` instead —
+`search.py`'s `search(free=..., some=...)` does this correctly. Reserve
+`PhraseSearch` for standalone exact-phrase searches (Q3, Q4, Phase 2, Phase
+6) where nothing else needs to be required alongside it. Always still open
+the actual page image to confirm relevance — `SomeSearch`/`PhraseSearch`
+terms only rank, they don't filter, so an OR-group term can dominate a
+result even when `FreeSearch` is present.
+
+(Also: the form carries field values over from your previous search
+server-side ("Keep filters"). `search.py`'s `fill_and_submit()` now clicks
+"Clear" before every fill, so this isn't a concern when using the tool —
+but it means clicking around the form manually between searches without
+clearing can silently mix queries.)
+
+**Update:** `FreeSearch` + `SomeSearch` together are *also* unreliable, just
+differently broken. Isolated by testing `free="Moonraker"` against
+`some=` values of increasing length over the same date range: `"braces"`
+alone → 12 (page-1 baseline, no filtering), `"teeth"` alone → 12,
+`"braces teeth"` → 7, `"Dolly braces"` → 1, `"Dolly braces teeth"` → 0.
+A true OR can only ever match *more* documents as you add words —
+count going down as words are added means `SomeSearch`'s words are
+effectively AND'ed together once a required `FreeSearch` clause is also
+present (the opposite of standalone `SomeSearch` behaviour, which — per
+the very first Phase 1 attempt — genuinely is OR-like when it's the only
+populated field). In short: don't trust multi-word `SomeSearch` for
+anything except a single word, regardless of what else is populated.
+
+**Adopted methodology going forward:** fetch the `FreeSearch`-required
+result set alone (reliable), then rank/filter locally against the OR-group
+keywords using `search.keyword_matches()` — full control, no dependence on
+the engine's undocumented combinator behaviour. This is slower (more
+pages fetched) but the only approach verified to not silently drop
+relevant hits.
+
 ## Phase 1 — Direct hits (do these first, ~10 min)
 
 Straight shots at the claim itself.

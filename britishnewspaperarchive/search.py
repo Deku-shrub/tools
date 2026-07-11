@@ -9,6 +9,32 @@ Pagination reuses the site's own "&page=N" (0-indexed) query param on the
 results URL, so subsequent pages are just direct navigations rather than
 re-submitting the form.
 
+IMPORTANT — how the fields actually combine (reverse-engineered from the
+composed "basicsearch" query string, not documented by the site):
+  - `free` (FreeSearch) is the only field whose terms are REQUIRED — the
+    site prefixes it with "+" (e.g. "+moonraker"), so results must contain
+    it.
+  - `phrase` (PhraseSearch) and `some` (SomeSearch) are NOT required, even
+    though "phrase" sounds like it should be. Their terms are appended
+    unprefixed, which in the underlying Lucene-style query means "optional,
+    boosts relevance if present" — NOT "must match". A search combining
+    only `phrase` + `some` (no `free`) can and will return results that
+    contain neither, because unprefixed terms never filter, only rank.
+  - Worse: `some` isn't reliable for OR-broadening either once `free` is
+    also populated — multi-word `some` values narrow results as if AND'ed
+    together, rather than broadening them (verified: adding words to
+    `some` only ever decreased the result count, never increased it).
+    Prefer fetching the `free`-required set alone and filtering locally
+    with `keyword_matches()` below over trusting `some`/`phrase` for
+    anything beyond a single word.
+  - Always verify hits by opening the actual page image — snippets don't
+    tell you which clause actually matched, and OCR misreads happen.
+  - The advanced-search form also carries values over from your previous
+    search (site-side "Keep filters" behaviour) if you don't clear it
+    first — fill_and_submit() below always clicks the form's "Clear"
+    button before filling in new values, so each call here is isolated
+    regardless of what a prior call submitted.
+
 Programmatic use:
     from search import build_driver, search
 
@@ -143,6 +169,12 @@ def fill_and_submit(
         EC.presence_of_element_located((By.ID, "searchAdvanced"))
     )
 
+    # The site persists your previous search's field values into the next
+    # load of this form (matches the results page's "Keep filters" toggle),
+    # so without an explicit reset, fields from an earlier unrelated call
+    # silently leak into this one. Always start from a clean form.
+    form.find_element(By.ID, "reset").click()
+
     if free:
         form.find_element(By.ID, "FreeSearch").send_keys(free)
     if some:
@@ -244,6 +276,18 @@ def scrape_results_page(driver):
     return results
 
 
+def keyword_matches(result, keywords):
+    """Case-insensitive substring match of `keywords` against a result's
+    headline + snippet. Use this instead of SomeSearch for multi-word OR
+    filtering — see search.py's module docstring for why SomeSearch itself
+    isn't reliable for that once FreeSearch is also populated.
+
+    Returns the list of keywords that matched (empty list = no match).
+    """
+    haystack = f"{result.get('headline') or ''} {result.get('snippet') or ''}".lower()
+    return [kw for kw in keywords if kw.lower() in haystack]
+
+
 def search(driver, *, max_pages=1, **form_kwargs):
     """Fill the advanced search form, submit, and scrape up to `max_pages`
     pages of results (site pagination is 0-indexed via &page=N)."""
@@ -252,10 +296,14 @@ def search(driver, *, max_pages=1, **form_kwargs):
     for page in range(max_pages):
         separator = "&" if "?" in base_url else "?"
         driver.get(f"{base_url}{separator}page={page}")
-        WebDriverWait(driver, WAIT_SECONDS).until(
-            lambda d: d.find_elements(By.CSS_SELECTOR, "article.bna-card")
-            or "no results" in d.page_source.lower()
-        )
+        try:
+            WebDriverWait(driver, WAIT_SECONDS).until(
+                lambda d: d.find_elements(By.CSS_SELECTOR, "article.bna-card")
+                or "no results" in d.page_source.lower()
+            )
+        except TimeoutException:
+            # Requested a page past the end of the real result set.
+            break
         page_results = scrape_results_page(driver)
         if not page_results:
             break
@@ -285,6 +333,10 @@ def _build_arg_parser():
 
 
 def main():
+    # OCR'd newspaper text can contain characters (ligatures, curly quotes,
+    # etc.) outside Windows' default console codepage; don't crash on print.
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
     args = _build_arg_parser().parse_args()
     driver = build_driver()
     try:
@@ -312,7 +364,9 @@ def main():
         sys.exit(f"Search failed: {exc}\nScreenshot saved to {screenshot_path}.")
 
     if args.json:
-        Path(args.json).write_text(json.dumps(results, indent=2, ensure_ascii=False))
+        Path(args.json).write_text(
+            json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
         print(f"Wrote {len(results)} result(s) to {args.json}")
     else:
         print(f"{len(results)} result(s):\n")
