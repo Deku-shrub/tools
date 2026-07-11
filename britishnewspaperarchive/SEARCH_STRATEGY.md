@@ -5,6 +5,26 @@ that either supports or contradicts the "Dolly wore braces" claim, and — more
 valuably — surfaces sources nobody has checked yet: the syndicated novelisation
 run, the Royal Premiere coverage, and the December 1982 ITV premiere.
 
+## KEY FINDING (2026-07-11)
+
+Felix Barker's Moonraker review, **Evening News (London), 28 June 1979** (day
+after the Royal Premiere) — full page verified via PDF, not just OCR snippet —
+describes Dolly as "a diminutive [girl] in pigtails and **steel-rimmed
+glasses** (Blanche Ravalec)." No mention of braces anywhere on the page. See
+`findings/bl-0005765-19790628-219-0021/`.
+
+This is the most specific contemporary physical description of Dolly found in
+~250+ sources checked across Phases 1, 3, 4, and 5. Across every single
+source that mentions dental imagery at all (dozens, spanning 1979 cinema
+release through the 1982 ITV broadcast and a 2004 retrospective), the "steel
+teeth" belong to **Jaws**, never Dolly — see `findings/` for the full trail.
+
+**Working hypothesis**: "Dolly wore braces" is plausibly a Mandela-Effect-style
+conflation of two real, distinct, contemporaneously-documented details —
+Dolly's own steel-rimmed glasses, and her love interest Jaws's steel
+teeth — merged into one false "metal on the face" memory over decades. Not
+proven, but this is the strongest candidate mechanism found so far.
+
 Written against the Advanced Search form fields at
 `https://britishnewspaperarchive.co.uk/search/advanced` (`FreeSearch`,
 `SomeSearch`, `PhraseSearch`, `NotSearch`, `Place`, `NewspaperTitle`,

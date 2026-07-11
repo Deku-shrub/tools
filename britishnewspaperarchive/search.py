@@ -172,8 +172,22 @@ def fill_and_submit(
     # The site persists your previous search's field values into the next
     # load of this form (matches the results page's "Keep filters" toggle),
     # so without an explicit reset, fields from an earlier unrelated call
-    # silently leak into this one. Always start from a clean form.
-    form.find_element(By.ID, "reset").click()
+    # silently leak into this one. The form's own "Clear" button looks like
+    # the fix but isn't safe: it wipes the `value` attribute off every
+    # ContentType/AccessType checkbox (not just their checked state),
+    # permanently breaking those filters for the rest of the session. Reset
+    # each field individually instead.
+    for field_id in ("FreeSearch", "SomeSearch", "NotSearch", "PhraseSearch", "PublicTag"):
+        form.find_element(By.ID, field_id).clear()
+    for checkbox in form.find_elements(By.CSS_SELECTOR, "input[type='checkbox']"):
+        if checkbox.is_selected():
+            checkbox.click()
+    for select_id in (
+        "Place", "NewspaperTitle",
+        "DateFromDay", "DateFromMonth", "DateFromYear",
+        "DateToDay", "DateToMonth", "DateToYear",
+    ):
+        Select(form.find_element(By.ID, select_id)).select_by_index(0)
 
     if free:
         form.find_element(By.ID, "FreeSearch").send_keys(free)
@@ -213,7 +227,7 @@ def fill_and_submit(
     form.find_element(By.ID, "submit").click()
 
     WebDriverWait(driver, WAIT_SECONDS).until(
-        lambda d: "/search/results/" in d.current_url
+        lambda d: "/search/results" in d.current_url
     )
     url = driver.current_url
     return re.sub(r"[&?]page=\d+", "", url)
