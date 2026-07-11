@@ -62,7 +62,7 @@ from pathlib import Path
 from urllib.parse import urljoin
 
 from selenium import webdriver
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
 from selenium.webdriver.support import expected_conditions as EC
@@ -101,7 +101,18 @@ def build_driver():
     options.add_argument("-no-remote")
     options.add_argument("-profile")
     options.add_argument(str(PROFILE_DIR))
-    return webdriver.Firefox(options=options)
+    try:
+        return webdriver.Firefox(options=options)
+    except WebDriverException:
+        # If a previous run was killed abnormally (e.g. the IDE/terminal
+        # closed mid-session), Firefox can leave a stale profile lock that
+        # makes every subsequent launch fail immediately with "Process
+        # unexpectedly closed". One retry after clearing it is safe here
+        # since PROFILE_DIR is a dedicated automation profile, never opened
+        # by a real Firefox window.
+        for lock_name in ("parent.lock", "lock"):
+            (PROFILE_DIR / lock_name).unlink(missing_ok=True)
+        return webdriver.Firefox(options=options)
 
 
 def _select_option_containing(select_el, text):
