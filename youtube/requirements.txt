@@ -1,0 +1,2 @@
+# No third-party dependencies — client.py/search.py/comments.py use only
+# Python's standard library (urllib, argparse, json, pathlib, re).
