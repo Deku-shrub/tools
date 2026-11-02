@@ -1,3 +1,11 @@
 __pycache__/
 research/
 .token.json
+# Study data: other people's health posts. Only queries.json and extraction.md are tracked.
+studies/*/cache/
+studies/*/corpus.jsonl
+studies/*/extracted*.jsonl
+studies/*/.hash_key
+studies/*/download.log
+studies/*/extract_batch.json
+studies/*/extract_sample_prompt.txt

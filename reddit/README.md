@@ -32,6 +32,34 @@ python archive.py thread 3vzk53 --match braces
   `retrieved_on` and don't rank by them. Deleted or removed content often
   survives in the archive.
 
+## Studies: bulk collection + structured extraction
+
+For research across many queries, [collect.py](collect.py) downloads whole
+subreddits from Arctic Shift. It does this because server-side keyword search is
+unreliable (phrase/OR syntax returns non-matches) and gets throttled after a few
+dozen queries. It then runs every query locally and writes a JSONL corpus
+of the matching threads with structure intact. [extract.py](extract.py)
+then has Claude fill a per-person schema, and code checks every evidence
+quote against its source.
+
+A study is a folder in `studies/` holding:
+- `queries.json`: subreddits and query clusters. Each query is a list of
+  whole-word terms that must all appear. Phrases are allowed, and a trailing `*` allows suffixes.
+- `extraction.md`: the extraction instructions and pattern definitions.
+
+```powershell
+python collect.py studies/neck_tension             # download posts, fetch matching threads, write corpus.jsonl
+python collect.py studies/neck_tension --stats     # hit counts per query (after editing queries.json)
+python collect.py studies/neck_tension --no-download   # re-match and rebuild the corpus without downloading again
+python collect.py studies/neck_tension --bulk-comments # also download every comment (about a day for 7.7M)
+python extract.py studies/neck_tension --dry-run   # prompts + cost estimate
+python extract.py studies/neck_tension --submit    # then --collect, then --summary
+```
+
+Usernames are replaced with a keyed hash (HMAC) at download time and never
+stored. Corpus and cache files are git-ignored, because they contain other people's health
+posts.
+
 ## Official API
 
 The API is required rather than "nice to have". Reddit's network-security layer

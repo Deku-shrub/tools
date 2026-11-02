@@ -93,6 +93,7 @@ def api_get(path, params):
     too slow (caller should narrow it)."""
     query = {k: v for k, v in params.items() if v is not None}
     url = f"{API_ROOT}{path}?{urllib.parse.urlencode(query)}"
+    fast_422s = 0
     for attempt in range(MAX_RETRIES):
         req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
         started = time.monotonic()
@@ -110,7 +111,14 @@ def api_get(path, params):
             except json.JSONDecodeError:
                 message = body[:200]
             reset = float(exc.headers.get("X-RateLimit-Reset") or 10)
-            budget_spent = exc.code == 429 or (exc.code == 422 and elapsed < FAST_FAIL_SECONDS)
+            # An instant 422 usually means the per-minute budget is spent —
+            # but the server also instantly refuses queries it has already
+            # judged too expensive (e.g. a quoted phrase over years of a big
+            # subreddit), and waiting never fixes those. So wait out one
+            # fast 422; a second means "narrow the query" (_QueryTimeout).
+            fast_422 = exc.code == 422 and elapsed < FAST_FAIL_SECONDS
+            fast_422s += fast_422
+            budget_spent = exc.code == 429 or (fast_422 and fast_422s < 2)
             if budget_spent and attempt < MAX_RETRIES - 1:
                 print(f"  rate limited, sleeping {reset + 1:.0f}s...", file=sys.stderr)
                 time.sleep(reset + 1)
